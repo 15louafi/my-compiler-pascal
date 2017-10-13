@@ -1,0 +1,2 @@
+sh> make compile
+sh> make test_00.x

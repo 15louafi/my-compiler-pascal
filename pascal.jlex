@@ -1,0 +1,68 @@
+import java_cup.runtime.Symbol;
+%%
+%class Lexer
+%line
+%column
+%cup
+%standalone
+%state COMMENT
+%state COMMENTZONE
+
+ICNST = [0-9]+
+
+%%
+
+<YYINITIAL> {
+"print"		{ return new Symbol(sym.TK_PRINT);}
+"+"	{ return new Symbol(sym.TK_PLUS); }
+"-"	{ return new Symbol(sym.TK_MOINS); }
+"%"	{ return new Symbol(sym.TK_MODULO); }
+"*"	{ return new Symbol(sym.TK_FOIS); }
+"/"	{ return new Symbol(sym.TK_DIVISE); }
+":="    { return new Symbol(sym.TK_COLEGA); }
+"="	{ return new Symbol(sym.TK_EGAL); }
+"=="	{ return new Symbol(sym.TK_EGA); }
+"!="	{ return new Symbol(sym.TK_NOTEGA); }
+"<"	{ return new Symbol(sym.TK_INF); }
+">"	{ return new Symbol(sym.TK_SUP); }
+"<="	{ return new Symbol(sym.TK_INFEGA); }
+">="	{ return new Symbol(sym.TK_SUPEGA); }
+"&&"	{ return new Symbol(sym.TK_AND); }
+"||"	{ return new Symbol(sym.TK_OR); }
+"!!"	{ return new Symbol(sym.TK_NOT); }
+"("	{ return new Symbol(sym.TK_PAROUV); }
+")"	{ return new Symbol(sym.TK_PARFER); }
+"/*"    { yybegin(COMMENTZONE) ; }
+"#"     { yybegin(COMMENT) ; }
+"in"    { return new Symbol(sym.TK_IN); } 
+"if"    { return new Symbol(sym.TK_IF); } 
+"then"    { return new Symbol(sym.TK_THEN); } 
+"else"    { return new Symbol(sym.TK_ELSE); } 
+"end"    { return new Symbol(sym.TK_END); }
+"endf"    { return new Symbol(sym.TK_ENDF); }
+"while" { return new Symbol(sym.TK_WHILE); }
+"true" { return new Symbol(sym.TK_TRUE); }
+"false" { return new Symbol(sym.TK_FALSE); }
+"exit" { return new Symbol(sym.TK_EXIT); }
+"def"  { return new Symbol(sym.TK_DEF); }
+"return" { return new Symbol(sym.TK_RETURN); }
+"gl" { return new Symbol(sym.TK_GLOBAL); }
+"rt" { return new Symbol(sym.TK_RT); }
+";"		{ return new Symbol(sym.TK_SEP);}
+","		{ return new Symbol(sym.TK_COM);}
+{ICNST}		{ return new Symbol(sym.TK_ICNST, new Integer(yytext())); }
+[a-z]+  { return new Symbol(sym.TK_NAME, yytext()); }
+":"     { return new Symbol(sym.TK_DS); }
+[\ \t\n\r\f]	{ }
+.		{ System.err.println("unexpected char '" + yytext() +
+				     "' line " + yyline);
+                  return new Symbol(sym.error); }
+}
+<COMMENT> {
+"\n"    { yybegin(YYINITIAL) ; }
+.       { }
+}
+<COMMENTZONE> {
+"*/"    { yybegin(YYINITIAL) ; }
+.       { }
+}

@@ -1,0 +1,386 @@
+import java_cup.runtime.*;
+import java.util.*;
+import java.io.*;
+
+parser code {:
+  public static void main(String args[]) throws Exception {
+    new Parser(new Lexer(new InputStreamReader(System.in))).parse();
+  }
+:}
+
+action code {:
+  // attributes & methods seen from actions
+  Integer labCount = new Integer(0);
+  String fname = "";
+  String make_inst(String lab, String op, String arg) {
+    return lab + "\t" + op + "\t" + arg + "\n";
+  }
+
+  String get_label(){
+    return labCount + "";
+  }
+
+  void incr_label(){
+    labCount = labCount + 1;
+  }
+
+  String make_comm(String comment) {
+    return ";/ " + comment + "\n";
+  }
+:}
+
+terminal TK_SEP, TK_PRINT, TK_PLUS, TK_MOINS, TK_FOIS, TK_DIVISE, TK_EGAL, 
+TK_MODULO, TK_COM, TK_COLEGA;
+terminal Integer TK_ICNST;
+terminal String TK_PAROUV, TK_PARFER, TK_NAME, TK_DS, TK_IN, 
+TK_IF, TK_THEN, TK_ELSE, TK_END, TK_ENDF, TK_WHILE, TK_TRUE, TK_FALSE,
+TK_INF, TK_SUP, TK_INFEGA, TK_SUPEGA, TK_EGA, TK_NOTEGA,
+TK_AND, TK_OR, TK_NOT, TK_EXIT, TK_DEF, TK_RETURN, TK_RT, TK_GLOBAL;
+
+non terminal target;
+non terminal String program, linst, inst, print, expr, affectation, creation,
+fonction, varliste, argliste;
+
+precedence left TK_ICNST, TK_NAME;
+precedence left TK_AND, TK_OR, TK_NOT;
+precedence left TK_PLUS, TK_MOINS;
+precedence left TK_FOIS, TK_DIVISE;
+precedence left TK_MODULO;
+precedence left TK_IF, TK_THEN, TK_ELSE, TK_END, TK_WHILE;
+precedence left TK_EGA, TK_INF, TK_SUP, TK_INFEGA, TK_SUPEGA, TK_NOTEGA;
+precedence nonassoc TK_COM;
+precedence nonassoc TK_PAROUV, TK_PARFER;
+precedence nonassoc TK_RT;
+precedence nonassoc TK_GLOBAL;
+
+start with target;
+
+target ::= program:s {: System.out.println(s); :}
+  ;
+
+program ::= linst:l {: RESULT = l + "\tSTOP\n"; :}
+  ;
+linst ::= inst:i {: RESULT = i; :}
+  | linst:l inst:i {: RESULT = l + i; :}
+  ;
+inst  ::= print:i TK_SEP {: RESULT = i; :}
+	| creation:i {: RESULT = i; :}
+	| affectation:i {: RESULT = i; :}
+	| fonction:f {: RESULT = f; :}
+	| TK_RETURN expr:e {: RESULT = e +
+	"\tSWAP\n" +
+	"\tGOTO\n"; :}
+	| TK_SEP {: RESULT = ""; :}
+	| TK_EXIT expr:e {: RESULT = e +
+	"\tSTOP\n"; :}
+	| TK_IF expr:e TK_THEN linst:l1 TK_ELSE linst:l2 TK_END
+	{: RESULT = e + "\n" +
+	"\tBEZ\t" + "labelse" + get_label() + "\n" +
+	l1 + "\n" +
+	"\tPUSH\t" + "labfin" + get_label() + "\n" +
+	"\tGOTO\t" + "\n" +
+	"labelse" + get_label() +  "\tEQU\t*\n" +
+	l2 + "\n" +
+	"labfin" + get_label() + "\tEQU\t*\n" ;
+	incr_label(); :}
+	| TK_WHILE expr:e linst:l TK_END
+	{: RESULT = "debut" + get_label() + "\tEQU\t*\n" +
+	e + "\n" +
+	"\tBEZ\t" + "fin\n" + get_label() +
+	l + "\n" +
+	"\tPUSH\t" + "debut\n" + get_label() +
+	"\tGOTO\t" + "\n" +	
+	"fin" + get_label() + "\tEQU\t*\n" ;
+	incr_label(); :}
+	;
+print ::= TK_PRINT expr:e
+        {:
+	    String comment = make_comm("print...");
+	    RESULT = comment + e + "\tOUT\n";
+	:}
+	| TK_PRINT TK_PAROUV TK_PARFER
+	{: RESULT = "\tOUT\n"; :}
+	;
+expr ::= TK_ICNST:i {: RESULT = "\tPUSH\t" + i + "\n"; :}
+  | TK_TRUE {: RESULT = "\tPUSH\t" + 1 + "\n"; :}
+  | TK_FALSE {: RESULT = "\tPUSH\t" + 0 + "\n"; :}
+  | TK_NAME:v {: RESULT = "\tPUSH\t" + v + fname + "\n" +
+	"\tLOAD\t" + "\n"; :}
+  | TK_GLOBAL TK_NAME:v {: RESULT = "\tPUSH\t" + v + "\n" +
+	"\tLOAD\t" + "\n"; :}
+  | TK_RT fonction:f {: RESULT = f; :}
+  | TK_NAME:v TK_ICNST:i {: RESULT = "\tPUSH\t" + v + "\n" +
+	"\tPUSH\t" + i + "\n" +
+	"\tLOAD\t" + "\n"; :}
+  |  expr:e1 TK_PLUS expr:e2 // effectue l'addition
+	{: RESULT = e1 +
+		 e2 +
+		"\tADD\t" + "\n"; :}
+  |  expr:e1 TK_MOINS expr:e2 // effectue la soustraction
+	{: RESULT = e1 +
+		 e2 +
+		"\tSUB\t" + "\n"; :}
+  |  TK_MOINS expr:e // effectue le moins unaire
+	{: RESULT = "\tPUSH\t" + 0 + "\n" +
+		 e +
+		"\tSUB\t" + "\n"; :}
+  |  expr:e1 TK_FOIS expr:e2 // effectue la multiplication
+	{: RESULT = e1 +
+		 e2 +
+		"\tMUL\n"; :}
+  |  expr:e1 TK_DIVISE expr:e2 // effectue la division
+	{: RESULT = e1 +
+		 e2 +
+		"\tDIV\n"; :}
+  |  expr:e1 TK_MODULO expr:e2
+	{: RESULT = e1 +
+		e1 +
+		e2 +
+		"\tDIV\n" +
+		e2 +
+		"\tMUL\n" +		
+		"\tSUB\n"; :}
+  |  TK_PAROUV expr:e1 TK_PARFER // effectue le parenthèsage
+	{: RESULT = e1 ; :}
+  |  expr:e1 TK_EGA expr:e2
+	{: RESULT = e1 +
+	e2 +
+	"\tSUB\n" +
+	"\tBEZ\t" + "labif" + get_label() + "\n" +
+	"\tPUSH\t" + 0 + "\n" +
+	"\tPUSH\t" + "labfin" + get_label() + "\n" +
+	"\tGOTO\t" + "\n" +	
+	"labif" + get_label() +  "\tEQU\t*\n" +
+	"\tPUSH\t" + 1 + "\n" +
+	"labfin" + get_label() + "\tEQU\t*\n" ;
+	incr_label(); :}
+  |  expr:e1 TK_NOTEGA expr:e2
+	{: RESULT = e1 +
+	e2 +
+	"\tSUB\n" +
+	"\tBEZ\t" + "labif" + get_label() + "\n" +
+	"\tPUSH\t" + 1 + "\n" +
+	"\tPUSH\t" + "labfin" + get_label() + "\n" +
+	"\tGOTO\t" + "\n" +	
+	"labif" + get_label() +  "\tEQU\t*\n" +
+	"\tPUSH\t" + 0 + "\n" +
+	"labfin" + get_label() + "\tEQU\t*\n" ;
+	incr_label(); :}
+  |  expr:e1 TK_INF expr:e2
+	{: RESULT = e2 +
+	e1 +
+	"\tSUB\n" +
+	"\tBGZ\t" + "labif" + get_label()  + "\n" +
+	"\tPUSH\t" + 0 + "\n" +
+	"\tPUSH\t" + "labfin" + get_label() + "\n" +
+	"\tGOTO\t" + "\n" +	
+	"labif" + get_label() +  "\tEQU\t*\n" +
+	"\tPUSH\t" + 1 + "\n" +
+	"labfin" + get_label() + "\tEQU\t*\n" ;
+	incr_label(); :}
+  |  expr:e1 TK_SUP expr:e2
+	{: RESULT = e1 +
+	e2 +
+	"\tSUB\n" +
+	"\tBGZ\t" + "labif" + get_label() + "\n" +
+	"\tPUSH\t" + 0 + "\n" +
+	"\tPUSH\t" + "labfin" + get_label() + "\n" +
+	"\tGOTO\t" + "\n" +	
+	"labif" + get_label() +  "\tEQU\t*\n" +
+	"\tPUSH\t" + 1 + "\n" +
+	"labfin" + get_label() + "\tEQU\t*\n" ;
+	incr_label(); :}
+  |  expr:e1 TK_INFEGA expr:e2
+	{: RESULT = e2 +
+	e1 +
+	"\tSUB\n" +
+	"\tBGZ\t" + "labif" + get_label() + "\n" +
+	e2 +
+	e1 +
+	"\tSUB\n" +
+	"\tBEZ\t" + "labif1" + get_label() + "\n" +
+	"\tPUSH\t" + 0 + "\n" +
+	"\tPUSH\t" + "labfin1" + get_label() + "\n" +
+	"\tGOTO\t" + "\n" +	
+	"labif1" + get_label() +  "\tEQU\t*\n" +
+	"\tPUSH\t" + 1 + "\n" +
+	"labfin1" + get_label() + "\tEQU\t*\n" +
+	"\tPUSH\t" + "labfin" + get_label() + "\n" +
+	"\tGOTO\t" + "\n" +	
+	"labif" + get_label() +  "\tEQU\t*\n" +
+	"\tPUSH\t" + 1 + "\n" +	
+	"labfin" + get_label() + "\tEQU\t*\n" ;
+	incr_label(); :}
+  |  expr:e1 TK_SUPEGA expr:e2
+	{: RESULT = e1 +
+	e2 +
+	"\tSUB\n" +
+	"\tBGZ\t" + "labif" + get_label() + "\n" +
+	e1 +
+	e2 +
+	"\tSUB\n" +
+	"\tBEZ\t" + "labif1" + get_label() + "\n" +
+	"\tPUSH\t" + 0 + "\n" +
+	"\tPUSH\t" + "labfin1"+ get_label() + "\n" +
+	"\tGOTO\t" + "\n" +	
+	"labif1" + get_label() +  "\tEQU\t*\n" +
+	"\tPUSH\t" + 1 + "\n" +
+	"labfin1" + get_label() + "\tEQU\t*\n" +
+	"\tPUSH\t" + "labfin" + get_label() + "\n" +
+	"\tGOTO\t" + "\n" +	
+	"labif" + get_label() +  "\tEQU\t*\n" +
+	"\tPUSH\t" + 1 + "\n" +	
+	"labfin" + get_label() + "\tEQU\t*\n" ;
+	incr_label(); :}
+  |  expr:e1 TK_AND expr:e2
+	{: RESULT = e1 +
+	e2 +
+	"\tMUL\n"; :}
+  |  expr:e1 TK_OR expr:e2
+	{: RESULT = e1 +
+	e2 +
+	"\tADD\n" +
+	e1 +
+	e2 +
+	"\tMUL\n" +
+	"\tSUB\n"; :}
+  |  TK_NOT expr:e
+	{: RESULT = "\tPUSH\t" + 1 + "\n" +
+	e +
+	"\tSUB\n"; :}
+	;
+
+
+creation ::= TK_NAME:v TK_DS TK_ICNST:i
+	{: RESULT = v + fname + "\tDS\t" + i + "\n" +
+	v + fname + "length" + "\tDS\t" + 1 + "\n" +
+	"\tPUSH\t" + v + fname + "length" + "\n" +
+	"\tPUSH\t" + i + "\n" +
+	"\tSTORE\t" + "\n"; :}
+	| TK_NAME:v TK_DS TK_ICNST:i TK_COM creation:c
+	{: RESULT = v + fname + "\tDS\t" + i + "\n" +
+	v + fname + "length" + "\tDS\t" + 1 + "\n" +
+	"\tPUSH\t" + v + fname + "length" + "\n" +
+	"\tPUSH\t" + i + "\n" +
+	"\tSTORE\t" + "\n"
+	+ c + "\n"; :}
+	| TK_NAME:v TK_COLEGA expr:e
+	{: RESULT = v + fname + "\tDS\t" + 1 + "\n" +
+	v + fname + "length" + "\tDS\t" + 1 + "\n" +
+	"\tPUSH\t" + v + fname + "length" + "\n" +
+	"\tPUSH\t" + 1 + "\n" +
+	"\tSTORE\t" + "\n" +
+	"\tPUSH\t" + v + fname + "\n" +
+	e + "\n" +
+	"\tSTORE\t" + "\n"; :}
+	|  TK_GLOBAL TK_NAME:v TK_DS TK_ICNST:i
+	{: RESULT = v + "\tDS\t" + i + "\n" +
+	v + "length" + "\tDS\t" + 1 + "\n" +
+	"\tPUSH\t" + v + "length" + "\n" +
+	"\tPUSH\t" + i + "\n" +
+	"\tSTORE\t" + "\n"; :}
+	| creation:c TK_COM TK_GLOBAL TK_NAME:v TK_DS TK_ICNST:i 
+	{: RESULT = c + "\n" +
+	v + "\tDS\t" + i + "\n" +
+	v + "length" + "\tDS\t" + 1 + "\n" +
+	"\tPUSH\t" + v + "length" + "\n" +
+	"\tPUSH\t" + i + "\n" +
+	"\tSTORE\t" + "\n"; :}
+	| TK_GLOBAL TK_NAME:v TK_COLEGA expr:e
+	{: RESULT = v + "\tDS\t" + 1 + "\n" +
+	v + "length" + "\tDS\t" + 1 + "\n" +
+	"\tPUSH\t" + v + "length" + "\n" +
+	"\tPUSH\t" + 1 + "\n" +
+	"\tSTORE\t" + "\n" +
+	"\tPUSH\t" + v + "\n" +
+	e + "\n" +
+	"\tSTORE\t" + "\n"; :}
+;
+
+affectation ::= TK_GLOBAL TK_NAME:v TK_EGAL TK_IN
+	{: RESULT = "\tPUSH\t" + v + "\n" +
+	 "\tIN\t" + "\n" +
+	 "\tSTORE\t" + "\n"; :}
+	| TK_GLOBAL TK_NAME:v TK_EGAL expr:e
+	{: RESULT = "\tPUSH\t" + v + "\n" +
+	 e + "\n" +
+	 "\tSTORE\t" + "\n"; :}
+	| TK_GLOBAL TK_NAME:var TK_ICNST:i expr:e
+	{: RESULT = "\tPUSH\t" + var + "\n" +
+		"\tPUSH\t" + i + "\n" +
+		"\tADD\n" +
+		e + "\n" +
+		"\tSTORE\n"; :}
+	| TK_NAME:v TK_EGAL TK_IN
+	{: RESULT = "\tPUSH\t" + v + fname + "\n" +
+	 "\tIN\t" + "\n" +
+	 "\tSTORE\t" + "\n"; :}
+	| TK_NAME:v TK_EGAL expr:e
+	{: RESULT = "\tPUSH\t" + v + fname + "\n" +
+	 e + "\n" +
+	 "\tSTORE\t" + "\n"; :}
+	| TK_NAME:var TK_ICNST:i expr:e
+	{: RESULT = "\tPUSH\t" + var + fname + "\n" +
+		"\tPUSH\t" + i + "\n" +
+		"\tADD\n" +
+		e + "\n" +
+		"\tSTORE\n"; :}
+;
+
+fonction ::= TK_DEF TK_NAME:n TK_PAROUV TK_PARFER linst:l TK_ENDF
+	{: RESULT = "\tPUSH\t" + "labfin" + n + "\n" +
+	"\tGOTO\n" +
+	"labdeb" + n + "\tEQU\t" + "*\n" +
+	l +
+	"\tGOTO\n" +
+	"labfin" + n + "\tEQU\t" + "*\n"; :}
+	| TK_DEF TK_NAME:n TK_PAROUV {: fname = n; :} varliste:v TK_PARFER linst:l TK_ENDF
+	{: RESULT = make_comm(n) + "\tPUSH\t" + "labfin" + n + "\n" +
+	"\tGOTO\n" +
+	"labdeb" + n + "\tEQU\t" + "*\n" +
+	v +
+	l +
+	"\tGOTO\n" +
+	"labfin" + n + "\tEQU\t" + "*\n";
+	fname = ""; :}
+	| TK_NAME:n TK_PAROUV TK_PARFER
+	{:RESULT = "\tPUSH\t" + "labcall" + get_label() + n + "\n" +
+	"\tPUSH\t" + "labdeb" + n + "\n" +
+	"\tGOTO\n" +
+	"labcall" + get_label() + n + "\tEQU\t" + "*\n";
+	incr_label(); 
+	fname = ""; :}
+	| TK_NAME:n TK_PAROUV argliste:al TK_PARFER
+	{: fname = n;
+	RESULT = "\tPUSH\t" + "labcall" + get_label() + n + "\n" +
+	al +
+	"\tPUSH\t" + "labdeb" + n + "\n" +
+	"\tGOTO\n" +
+	"labcall" + get_label() + n + "\tEQU\t" + "*\n";
+	incr_label(); :}
+;
+
+varliste ::= TK_NAME:v
+	{: RESULT = v + fname + "\tDS\t" + 1 + "\n" +
+	"\tPUSH\t" + v + fname + "\n" +
+	"\tSWAP\n" +
+	"\tSTORE\n"; :}
+	| varliste:varl TK_COM TK_NAME:v
+	{: RESULT = varl +
+	v + fname + "\tDS\t" + 1 + "\n" +
+	"\tPUSH\t" + v + fname + "\n" +
+	"\tSWAP\n" +
+	"\tSTORE\n"; :}
+;
+
+argliste ::= expr:e
+	{: RESULT = e; :}
+	|argliste:al TK_COM expr:e
+	{: RESULT = al + e; :}
+;
+	
+
+
+
+
+
